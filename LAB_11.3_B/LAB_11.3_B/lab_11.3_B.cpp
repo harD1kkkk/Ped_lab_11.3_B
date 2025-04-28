@@ -197,39 +197,56 @@ void SortFileB(const char* fname)
 void BuildIndexB(const char* dataFile, const char* idxFile)
 {
     int n = RecordCountB(dataFile);
-    if (n <= 0)
+    if (n <= 0) return;
+
+    fstream df(dataFile, ios::binary | ios::in | ios::out);
+    if (!df)
     {
+        cout << "Cannot open data file for indexing\n";
         return;
     }
-    struct Rec { StudentB s; int idx; };
-    Rec* arr = new Rec[n];
-    ifstream fin(dataFile, ios::binary);
-    for (int i = 0; i < n; i++)
+
+    ofstream ix(idxFile, ios::binary | ios::trunc);
+    if (!ix)
     {
-        fin.read((char*)&arr[i].s, sizeof(arr[i].s));
-        arr[i].idx = i;
+        cout << "Cannot open index file for writing\n";
+        df.close();
+        return;
     }
-    fin.close();
-    for (int i = 0; i < n - 1; i++)
+
+    for (int range = n; range > 0; --range)
     {
-        for (int j = 0; j < n - 1 - i; j++)
+        StudentB bestRec;
+        ReadRecordB(df, 0, bestRec);
+        int bestIdx = 0;
+
+        for (int i = 1; i < range; ++i)
         {
-            if (CompareB(arr[j].s, arr[j + 1].s) < 0)
+            StudentB cur;
+            ReadRecordB(df, i, cur);
+            if (CompareB(cur, bestRec) > 0)
             {
-                Rec tmp = arr[j];
-                arr[j] = arr[j + 1];
-                arr[j + 1] = tmp;
+                bestRec = cur;
+                bestIdx = i;
             }
         }
+
+        ix.write((char*)&bestIdx, sizeof(bestIdx));
+
+        if (bestIdx != range - 1)
+        {
+            StudentB tail;
+            ReadRecordB(df, range - 1, tail);
+
+            WriteRecordB(df, bestIdx, tail);
+            WriteRecordB(df, range - 1, bestRec);
+        }
     }
-    ofstream fout(idxFile, ios::binary);
-    for (int i = 0; i < n; i++)
-    {
-        fout.write((char*)&arr[i].idx, sizeof(int));
-    }
-    fout.close();
-    delete[] arr;
+
+    df.close();
+    ix.close();
 }
+
 
 bool BinarySearchB(const char* fname, const StudentB& key)
 {
@@ -375,10 +392,11 @@ int main()
             cout << "Index file name: ";
             cin >> idxf;
             BuildIndexB(fname, idxf);
-			PrintIndexFile(idxf);
+            PrintIndexFile(idxf);
         }
         else if (choice == 5)
         {
+            SortFileB(fname);
             cout << "Data file name: ";
             cin >> fname;
             StudentB key;
